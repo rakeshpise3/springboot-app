@@ -1,0 +1,49 @@
+pipeline {
+    agent any
+    environment{
+        registry = "626114764726.dkr.ecr.us-east-2.amazonaws.com/my-docker-repo"
+    }
+    stages {
+        stage('git clone') {
+            steps {
+                git branch: 'main', url: 'https://github.com/rakeshpise3/springboot-app.git'
+            }
+        }
+        stage('Build') {
+            steps {
+                sh 'mvn clean install'
+            }
+        }
+       //building Docker images
+        stage("Building images"){
+            steps{
+              script {
+                dockerImage = docker.build registry
+              }
+            }
+            
+        }
+       // Uploading Docker images into AWS ECR 
+        stage("Pushing to ECR"){
+            steps{
+              script {
+                sh 'aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin 626114764726.dkr.ecr.us-east-2.amazonaws.com'
+                sh 'docker push 626114764726.dkr.ecr.us-east-2.amazonaws.com/my-docker-repo:latest'
+              }
+            
+            }
+            
+        }
+        stage("K8S Deploy"){
+            steps{
+               withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'k8s', namespace: '', serverUrl: '') {
+                  sh 'kubectl apply -f eks-deploy-k8s.yaml'
+
+               }
+              
+            }
+            
+        }
+
+    }
+}
